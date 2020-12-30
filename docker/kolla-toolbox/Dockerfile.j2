@@ -102,10 +102,10 @@ ENV ANSIBLE_LIBRARY /usr/share/ansible:$ANSIBLE_LIBRARY
 
 COPY find_disks.py kolla_keystone_service.py kolla_keystone_user.py kolla_sanity.py /usr/share/ansible/
 COPY ansible.cfg /var/lib/ansible/.ansible.cfg
-COPY __init__.py /opt/ansible/lib/python2.7/site-packages/cryptography/
 
 COPY ansible_sudoers /etc/sudoers.d/kolla_ansible_sudoers
-RUN chmod 440 /etc/sudoers.d/kolla_ansible_sudoers
+RUN chmod 440 /etc/sudoers.d/kolla_ansible_sudoers \
+    && pip install cryptography==2.9
 
 {% block kolla_toolbox_footer %}{% endblock %}
 {% block footer %}{% endblock %}
