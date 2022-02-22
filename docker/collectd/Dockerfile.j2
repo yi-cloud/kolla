@@ -1,5 +1,7 @@
 FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block collectd_header %}{% endblock %}
 
@@ -7,12 +9,15 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 
 {{ macros.configure_user(name='collectd') }}
 
+{{ macros.enable_extra_repos(['opstools']) }}
+
 {% set collectd_packages = [
     'collectd'
 ] %}
 
-{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+{% if base_package_type == 'rpm' %}
   {% set collectd_packages = collectd_packages + [
+      'collectd-amqp',
       'collectd-amqp1',
       'collectd-apache',
       'collectd-bind',
@@ -28,6 +33,7 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
       'collectd-generic-jmx',
       'collectd-ipmi',
       'collectd-log_logstash',
+      'collectd-logparser',
       'collectd-mcelog',
       'collectd-memcachec',
       'collectd-mysql',
@@ -48,25 +54,19 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
       'collectd-write_http',
       'collectd-write_kafka',
       'collectd-write_prometheus',
-      'python-collectd-gnocchi'
   ] %}
-
-  {% if base_arch in ['x86_64', 'ppc64le'] %}
-      {% set collectd_packages = collectd_packages + [
-        'collectd-iptables'
-        ] %}
-  {% endif %}
 
   {% if base_arch =='x86_64' %}
       {% set collectd_packages = collectd_packages + [
         'collectd-hugepages',
+        'collectd-iptables',
+        'collectd-pcie-errors',
+        'collectd-pmu',
         'collectd-rdt',
         'collectd-turbostat'
       ] %}
-
   {% endif %}
-# make sure, collectd is pulled from centos-opstools
-RUN yum-config-manager --disable epel
+
 {% endif %}
 
 {{ macros.install_packages(collectd_packages | customizable("packages")) }}

@@ -1,9 +1,13 @@
 FROM {{ namespace }}/{{ image_prefix }}kuryr-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block kuryr_libnetwork_header %}{% endblock %}
 
 {% import "macros.j2" as macros with context %}
+
+{{ macros.enable_extra_repos(['openvswitch']) }}
 
 {% if install_type == 'binary' %}
 
@@ -11,14 +15,13 @@ RUN echo '{{ install_type }} not yet available for {{ base_distro }}' \
     && /bin/false
 
 {% elif install_type == 'source' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
 
         {% set kuryr_libnetwork_packages = [
-            'bridge-utils',
             'openvswitch'
         ] %}
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
 
         {% set kuryr_libnetwork_packages = [
             'bridge-utils',

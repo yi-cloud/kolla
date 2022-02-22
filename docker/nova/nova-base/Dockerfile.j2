@@ -1,43 +1,41 @@
 FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block nova_base_header %}{% endblock %}
 
 {% import "macros.j2" as macros with context %}
 
+{{ macros.enable_extra_repos(['libvirt', 'openvswitch']) }}
 {{ macros.configure_user(name='nova', groups='qemu') }}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
 
         {% set nova_base_packages = [
-                'bridge-utils',
                 'openstack-nova-common',
-                'openvswitch',
-                'python-cinderclient',
-                'python-keystoneclient'
+                'openvswitch'
         ] %}
 
         {% if base_arch == 'x86_64' %}
             {% set nova_base_packages = nova_base_packages + [
-                'OVMF'
+                'edk2-ovmf'
             ] %}
         {% elif base_arch == 'aarch64' %}
             {% set nova_base_packages = nova_base_packages + [
-                'AAVMF'
+                'edk2-aarch64'
             ] %}
-        {% elif base_arch == 'ppc64le' %}
-            {# NOTE(Jeffrey4l): no packages for ppc64le #}
         {% endif %}
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
 
         {% set nova_base_packages = [
-                'bridge-utils',
                 'nova-common',
                 'openvswitch-switch',
-                'python-nova'
+                'python3-nova'
         ] %}
+
         {% if base_arch == 'x86_64' %}
             {% set nova_base_packages = nova_base_packages + [
                 'ovmf'
@@ -46,43 +44,37 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
             {% set nova_base_packages = nova_base_packages + [
                 'qemu-efi',
             ] %}
-        {% elif base_arch == 'ppc64le' %}
-            {# NOTE(Jeffrey4l): no packages for ppc64le #}
         {% endif %}
     {% endif %}
 
 {{ macros.install_packages(nova_base_packages | customizable("packages")) }}
 
 {% elif install_type == 'source' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
 
         {% set nova_base_packages = [
-                'bridge-utils',
                 'openvswitch'
         ] %}
         {% if base_arch == 'x86_64' %}
             {% set nova_base_packages = nova_base_packages + [
-                'OVMF'
+                'edk2-ovmf'
             ] %}
         {% elif base_arch == 'aarch64' %}
             {% set nova_base_packages = nova_base_packages + [
-                'AAVMF'
+                'edk2-aarch64'
             ] %}
-        {% elif base_arch == 'ppc64le' %}
-            {# NOTE(Jeffrey4l): no packages for ppc64le #}
         {% endif %}
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
 
         {% set nova_base_packages = [
-            'bridge-utils',
             'dnsmasq',
             'ebtables',
             'iproute2',
             'iptables',
             'openssh-client',
             'openvswitch-switch',
-            'python-libvirt'
+            'python3-libvirt'
         ] %}
         {% if base_arch == 'x86_64' %}
             {% set nova_base_packages = nova_base_packages + [
@@ -92,8 +84,6 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
             {% set nova_base_packages = nova_base_packages + [
                 'qemu-efi',
             ] %}
-        {% elif base_arch == 'ppc64le' %}
-            {# NOTE(Jeffrey4l): no packages for ppc64le #}
         {% endif %}
 
     {% endif %}
@@ -111,7 +101,10 @@ ADD plugins-archive /
     '/plugins/*'
 ] %}
 
+# NOTE(hrw): nova lists powervm in requirements and it wants 'futures' on py3.6 which can not be installed.
+# So let drop it as we do not support POWER architecture.
 RUN ln -s nova-base-source/* nova \
+    && sed -i -e "/^pypowervm/d" nova/requirements.txt \
     && {{ macros.install_pip(nova_base_pip_packages | customizable("pip_packages")) }} \
     && mkdir -p /etc/nova/ \
     && cp -r /nova/etc/nova/* /etc/nova/ \
@@ -127,13 +120,6 @@ RUN chmod 750 /etc/sudoers.d \
 
 {% endif %}
 
-
-{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
-    {% if base_arch == 'x86_64' %}
-# NOTE(jeffrey4l): for x86_64, nova will validate the existence of /usr/share/OVMF/OVMF_CODE.fd
-RUN ln -sf /usr/share/OVMF/OVMF_CODE.secboot.fd /usr/share/OVMF/OVMF_CODE.fd
-    {% endif %}
-{% endif %}
 
 COPY extend_start.sh /usr/local/bin/kolla_extend_start
 

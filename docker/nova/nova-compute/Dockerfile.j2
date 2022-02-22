@@ -1,12 +1,16 @@
 FROM {{ namespace }}/{{ image_prefix }}nova-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block nova_compute_header %}{% endblock %}
 
 {% import "macros.j2" as macros with context %}
 
+{{ macros.enable_extra_repos(['ceph', 'libvirt']) }}
+
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
 
         {% set nova_compute_packages = [
             'ceph-common',
@@ -14,22 +18,31 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
             'e2fsprogs',
             'genisoimage',
             'iscsi-initiator-utils',
+            'ndctl',
             'nfs-utils',
-            'nvme-cli',
             'openstack-nova-compute',
             'openvswitch',
             'parted',
-            'python-libguestfs',
-            'python-oslo-vmware',
-            'python-rtslib',
+            'python3-libguestfs',
+            'python3-oslo-vmware',
+            'python3-rtslib',
             'sysfsutils',
             'targetcli',
             'xfsprogs'
         ] %}
 
-{{ macros.install_packages(nova_compute_packages | customizable("packages")) }}
+        # NOTE(hrw): daxio is part of pmdk which is x86-64 only in CentOS 8
+        {% if base_arch == 'x86_64' %}
+            {% set nova_compute_packages = nova_compute_packages + [
+                'daxio'
+            ] %}
+        {% endif %}
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+{{ macros.install_packages(nova_compute_packages | customizable("packages")) }} \
+    && dnf remove -y linux-firmware \
+    && dnf clean all
+
+    {% elif base_package_type == 'deb' %}
 
         # ironic as workaround https://bugs.launchpad.net/packstack/+bug/1430388
         {% set nova_compute_packages = [
@@ -40,22 +53,28 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
             'multipath-tools',
             'nfs-common',
             'nova-compute',
-            'openvswitch-switch',
+            'nvme-cli',
             'open-iscsi',
+            'openvswitch-switch',
             'parted',
-            'python-guestfs',
-            'python-ironicclient',
-            'python-oslo.vmware',
-            'python-rtslib-fb',
+            'pmdk-tools',
+            'python3-cephfs',
+            'python3-guestfs',
+            'python3-ironicclient',
+            'python3-oslo.vmware',
+            'python3-rados',
+            'python3-rbd',
+            'python3-rtslib-fb',
             'sysfsutils',
             'targetcli-fb',
             'xfsprogs'
         ] %}
-
-        # systemd is needed to get python-guestfs installed
-        {% if base_distro == 'debian' %}
+        # FIXME(pkopec): since Ubuntu 19.04 'ndctl' package is available
+        # for other archs than 'x86_64
+        {% if base_distro == 'debian' or
+            (base_distro == 'ubuntu' and base_arch == 'x86_64') %}
             {% set nova_compute_packages = nova_compute_packages + [
-                'systemd/stretch-backports'
+                'ndctl',
             ] %}
         {% endif %}
 
@@ -65,7 +84,7 @@ RUN rm -f /etc/nova/nova-compute.conf
 
     {% endif %}
 {% elif install_type == 'source' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
 
         {% set nova_compute_packages = [
             'ceph-common',
@@ -74,20 +93,33 @@ RUN rm -f /etc/nova/nova-compute.conf
             'e2fsprogs',
             'genisoimage',
             'iscsi-initiator-utils',
-            'libvirt-python',
             'libosinfo',
+            'ndctl',
             'nfs-utils',
+            'nvme-cli',
             'openvswitch',
             'parted',
-            'python-libguestfs',
-            'python-rtslib',
-            'qemu-img-ev',
+            'python3-libguestfs',
+            'python3-libvirt',
+            'python3-rtslib',
+            'qemu-img',
             'sysfsutils',
             'targetcli',
             'xfsprogs'
         ] %}
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+        # NOTE(hrw): daxio is part of pmdk which is x86-64 only in CentOS 8
+        {% if base_arch == 'x86_64' %}
+            {% set nova_compute_packages = nova_compute_packages + [
+                'daxio'
+            ] %}
+        {% endif %}
+
+{{ macros.install_packages(nova_compute_packages | customizable("packages")) }} \
+    && dnf remove -y linux-firmware \
+    && dnf clean all
+
+    {% elif base_package_type == 'deb' %}
 
         {% set nova_compute_packages = [
             'ceph-common',
@@ -97,12 +129,18 @@ RUN rm -f /etc/nova/nova-compute.conf
             'libosinfo-bin',
             'multipath-tools',
             'nfs-common',
+            'nvme-cli',
             'open-iscsi',
             'parted',
-            'python-guestfs',
-            'python-libvirt',
-            'python-rtslib-fb',
+            'pmdk-tools',
+            'python3-cephfs',
+            'python3-guestfs',
+            'python3-libvirt',
+            'python3-rados',
+            'python3-rbd',
+            'python3-rtslib-fb',
             'qemu-utils',
+            'sysfsutils',
             'targetcli-fb',
             'xfsprogs'
         ] %}
@@ -112,19 +150,20 @@ RUN rm -f /etc/nova/nova-compute.conf
                 'qemu-efi'
             ] %}
         {% endif %}
-
-        # systemd is needed to get python-guestfs installed
-        {% if base_distro == 'debian' %}
+        # FIXME(pkopec): since Ubuntu 19.04 'ndctl' package is available
+        # for other archs than 'x86_64'
+        {% if base_distro == 'debian' or
+            (base_distro == 'ubuntu' and base_arch == 'x86_64') %}
             {% set nova_compute_packages = nova_compute_packages + [
-                'systemd/stretch-backports'
+                'ndctl',
             ] %}
         {% endif %}
 
-RUN mkdir -p /etc/ceph
+RUN mkdir -p /etc/ceph \
+    && {{ macros.install_packages(nova_compute_packages | customizable("packages"), chain=True) }}
 
     {% endif %}
 
-{{ macros.install_packages(nova_compute_packages | customizable("packages")) }}
 
 {% set nova_compute_pip_packages = [
         'oslo-vmware'

@@ -1,18 +1,24 @@
-FROM {{ namespace }}/{{ image_prefix }}prometheus-base:{{ tag }}
+FROM {{ namespace }}/{{ infra_image_prefix }}prometheus-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block prometheus_cadvisor_header %}{% endblock %}
 
 {% import "macros.j2" as macros with context %}
 
 {% block prometheus_cadvisor_repository_version %}
-ENV prometheus_cadvisor_version=0.27.4
+ENV prometheus_cadvisor_version=0.38.7
+ENV prometheus_cadvisor_sha256sum=fdb86c256df682cfec2abd57a4405c919ed26f1e27ebfabf487f6c516bc7f6c7
 {% endblock %}
 
 {% if base_arch in ['x86_64'] %}
 
 {% block prometheus_cadvisor_install %}
-RUN curl -ssL -o /opt/cadvisor https://github.com/google/cadvisor/releases/download/v${prometheus_cadvisor_version}/cadvisor && chmod 0755 /opt/cadvisor
+RUN curl -o /tmp/cadvisor https://github.com/google/cadvisor/releases/download/v${prometheus_cadvisor_version}/cadvisor \
+    && echo "${prometheus_cadvisor_sha256sum} /tmp/cadvisor" | sha256sum -c \
+    && mv /tmp/cadvisor /opt \
+    && chmod 0755 /opt/cadvisor
 {% endblock %}
 
 {% else %}
@@ -22,7 +28,7 @@ RUN curl -ssL -o /opt/cadvisor https://github.com/google/cadvisor/releases/downl
         {% set cadvisor_packages = [
              'libjs-bootstrap',
              'libjs-jquery',
-             'http://snapshot.debian.org/archive/debian/20180503T060640Z/pool/main/c/cadvisor/cadvisor_0.27.1+dfsg2-1_arm64.deb'
+             'cadvisor'
         ] %}
 
 {{ macros.install_packages(cadvisor_packages | customizable("packages")) }}

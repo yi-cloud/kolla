@@ -1,10 +1,13 @@
 FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block zun_base_header %}{% endblock %}
 
 {% import "macros.j2" as macros with context %}
 
+{{ macros.enable_extra_repos(['openvswitch']) }}
 {{ macros.configure_user(name='zun') }}
 
 {% if install_type == 'binary' %}
@@ -14,31 +17,23 @@ RUN echo '{{ install_type }} not yet available for {{ base_distro }}' \
 
 {% elif install_type == 'source' %}
 
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
 
         {% set zun_base_packages = [
-            'httpd',
-            'mod_wsgi',
-            'mod_ssl',
-            'python2-ldappool'
+            'numactl',
         ] %}
 
 {{ macros.install_packages(zun_base_packages | customizable("packages")) }}
-RUN mkdir -p /var/www/cgi-bin/zun \
-    && sed -i -r 's,^(Listen 80),#\1,' /etc/httpd/conf/httpd.conf \
-    && sed -i -r 's,^(Listen 443),#\1,' /etc/httpd/conf.d/ssl.conf
+RUN mkdir -p /var/www/cgi-bin/zun
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
 
         {% set zun_base_packages = [
-            'apache2',
-            'libapache2-mod-wsgi',
-            'python-ldappool'
+            'numactl',
         ] %}
 
 {{ macros.install_packages(zun_base_packages | customizable("packages")) }}
-RUN mkdir -p /var/www/cgi-bin/zun \
-    && echo > /etc/apache2/ports.conf
+RUN mkdir -p /var/www/cgi-bin/zun
     {% endif %}
 
 ADD zun-base-archive /zun-base-source
@@ -52,7 +47,8 @@ RUN ln -s zun-base-source/* zun \
     && mkdir -p /etc/zun /var/www/cgi-bin/zun \
     && cp -r /zun/etc/zun/* /etc/zun/ \
     && cp /zun/zun/api/app.wsgi /var/www/cgi-bin/zun \
-    && chown -R zun: /etc/zun /var/www/cgi-bin/zun
+    && chown -R zun: /etc/zun /var/www/cgi-bin/zun \
+    && sed -i 's|^exec_dirs.*|exec_dirs=/var/lib/kolla/venv/bin,/sbin,/usr/sbin,/bin,/usr/bin,/usr/local/bin,/usr/local/sbin|g' /etc/zun/rootwrap.conf
 
 {% endif %}
 

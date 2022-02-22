@@ -1,91 +1,128 @@
-.. _CONTRIBUTING:
+============================
+So You Want to Contribute...
+============================
 
-=================
-How To Contribute
-=================
+For general information on contributing to OpenStack, please check out the
+`contributor guide <https://docs.openstack.org/contributors/>`_ to get started.
+It covers all the basics that are common to all OpenStack projects: the
+accounts you need, the basics of interacting with our Gerrit review system,
+how we communicate as a community, etc.
+
+Below will cover the more project specific information you need to get started
+with Kolla.
 
 Basics
-======
+~~~~~~
 
-#. Our source code is hosted on `OpenStack Kolla Git
-   <https://git.openstack.org/cgit/openstack/kolla/>`_. Bugs should be filed on
-   `launchpad <https://bugs.launchpad.net/kolla>`_.
+The source repository for this project can be found at:
 
-#. Please follow OpenStack `Gerrit Workflow
-   <https://docs.openstack.org/infra/manual/developers.html#development-workflow>`__
-   to contribute to Kolla.
+   https://opendev.org/openstack/kolla
 
-#. Note the branch you're proposing changes to. ``master`` is the current focus
-   of development. Kolla project has a strict policy of only allowing backports
-   in ``stable/branch``, unless when not applicable. A bug in a
-   ``stable/branch`` will first have to be fixed in ``master``.
+Communication
+~~~~~~~~~~~~~
 
-#. Please file a `blueprint of kolla <https://blueprints.launchpad.net/kolla>`__
-   for any significant code change and a bug
-   for any significant bug fix.  See how to reference a bug or a blueprint in
-   the `commit message <https://wiki.openstack.org/wiki/GitCommitMessages>`_.
-   For simple changes, contributors may optionally add the text "TrivialFix" to
-   the commit message footer to indicate to reviewers a bug is not required.
+IRC Channel
+    ``#openstack-kolla`` (`channel logs`_) on `OFTC <http://oftc.net>`_
 
-Please use the existing sandbox repository, available at `sandbox
-<https://git.openstack.org/cgit/openstack-dev/sandbox>`_,
-for learning, understanding and testing the `Gerrit Workflow
-<https://docs.openstack.org/infra/manual/developers.html#development-workflow>`_.
+Weekly Meetings
+    On Wednesdays at 15:00 UTC in the IRC channel (`meetings logs`_)
 
-Adding a new service
-====================
+Mailing list (prefix subjects with ``[kolla]``)
+    http://lists.openstack.org/pipermail/openstack-discuss/
 
-Kolla aims to both containerise and deploy all services within the OpenStack
-"big tent". This is a constantly moving target as the ecosystem grows, so these
-guidelines aim to help make adding a new service to Kolla a smooth experience.
+Meeting Agenda
+    https://wiki.openstack.org/wiki/Meetings/Kolla
 
-The image
----------
+Whiteboard (etherpad)
+    Keeping track of CI gate status, release status, stable backports,
+    planning and feature development status.
+    https://etherpad.openstack.org/p/KollaWhiteBoard
 
-Kolla follows `Best practices for writing Dockerfiles
-<https://docs.docker.com/engine/userguide/eng-image/dockerfile_best-practices/>`__
-when designing and implementing services where at all possible.
+.. _channel logs: http://eavesdrop.openstack.org/irclogs/%23openstack-kolla/
+.. _meetings logs:  http://eavesdrop.openstack.org/meetings/kolla/
 
-We use ``jinja2`` templating syntax to help manage the volume and complexity
-that comes with maintaining multiple Dockerfiles for multiple different base
-operating systems.
+Contacting the Core Team
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-Images should be created under the ``docker`` directory. OpenStack services
-should inherit from the provided ``openstack-base`` image, while supporting and
-infrastructure services (for example, mongodb) should inherit from ``base``.
+The list in alphabetical order (on first name):
 
-Services consisting of only one service should be placed in an image named the
-same as that service, for example, ``horizon``. Services that consist of
-multiple processes generally use a base image and child images, for example,
-``glance-base``, ``glance-api``, and ``glance-registry``.
++-----------------------+---------------+------------------------------------+
+| Name                  | IRC nick      | Email address                      |
++=======================+===============+====================================+
+| `Christian Berendt`_  | berendt       | berendt@betacloud-solutions.de     |
++-----------------------+---------------+------------------------------------+
+| `Dincer Celik`_       | osmanlicilegi | hello@dincercelik.com              |
++-----------------------+---------------+------------------------------------+
+| `Eduardo Gonzalez`_   | egonzalez     | dabarren@gmail.com                 |
++-----------------------+---------------+------------------------------------+
+| `Jeffrey Zhang`_      | Jeffrey4l     | jeffrey.zhang@99cloud.net          |
++-----------------------+---------------+------------------------------------+
+| `Marcin Juszkiewicz`_ | hrw           | marcin.juszkiewicz@linaro.org      |
++-----------------------+---------------+------------------------------------+
+| `Mark Goddard`_       | mgoddard      | mark@stackhpc.com                  |
++-----------------------+---------------+------------------------------------+
+| `Michał Nasiadka`_    | mnasiadka     | mnasiadka@gmail.com                |
++-----------------------+---------------+------------------------------------+
+| `Radosław Piliszek`_  | yoctozepto    | radoslaw.piliszek@gmail.com        |
++-----------------------+---------------+------------------------------------+
+| `Surya Prakash`_      | spsurya       | singh.surya64mnnit@gmail.com       |
++-----------------------+---------------+------------------------------------+
+| `Cao Yuan`_           | caoyuan       | cao.yuan@99cloud.net               |
++-----------------------+---------------+------------------------------------+
+| `wu.chunyang`_        | wuchunyang    | wuchunyang@yovole.com              |
++-----------------------+---------------+------------------------------------+
 
-Jinja2 'blocks' are employed throughout the Dockerfile's to help operators
-customise various stages of the build (refer to `Dockerfile Customisation
-<https://docs.openstack.org/kolla/latest/admin/image-building.html#dockerfile-customisation>`__)
+.. _Christian Berendt: https://launchpad.net/~berendt
+.. _Dincer Celik: https://launchpad.net/~osmanlicilegi
+.. _Eduardo Gonzalez: https://launchpad.net/~egonzalez90
+.. _Jeffrey Zhang: https://launchpad.net/~jeffrey4l
+.. _Marcin Juszkiewicz: https://launchpad.net/~hrw
+.. _Mark Goddard: https://launchpad.net/~mgoddard
+.. _Michał Nasiadka: https://launchpad.net/~mnasiadka
+.. _Radosław Piliszek: https://launchpad.net/~yoctozepto
+.. _Surya Prakash: https://launchpad.net/~confisurya
+.. _Cao Yuan: https://launchpad.net/~caoi-yuan
+.. _wu.chunyang: https://launchpad.net/~wuchunyang
 
-Some of these blocks are free form however, there are a subset that should be
-common to every Dockerfile. The overall structure for a multi container service
-is as follows:
+The current effective list is also available from Gerrit:
+https://review.opendev.org/#/admin/groups/460,members
 
-.. code-block:: console
+New Feature Planning
+~~~~~~~~~~~~~~~~~~~~
 
-   FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
-   LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+New features are discussed via IRC or mailing list (with [kolla] prefix).
+Kolla project keeps blueprints in `Launchpad <https://blueprints.launchpad.net/kolla>`__.
+Specs are welcome but not strictly required.
 
-   {% block << service >>_header %}{% endblock %}
+Task Tracking
+~~~~~~~~~~~~~
 
-   {% import "macros.j2" as macros with context %}
+Kolla project tracks tasks in `Launchpad <https://bugs.launchpad.net/kolla>`__.
+Note this is the same place as for bugs.
 
-   << binary specific steps >>
+If you're looking for some smaller, easier work item to pick up and get started
+on, search for the 'low-hanging-fruit' tag.
 
-   << source specific steps >>
+A more lightweight task tracking is done via etherpad - `Whiteboard <https://etherpad.openstack.org/p/KollaWhiteBoard>`__.
 
-   << common steps >>
+Reporting a Bug
+~~~~~~~~~~~~~~~
 
-   {% block << service >>_footer %}{% endblock %}
-   {% block footer %}{% endblock %}
+You found an issue and want to make sure we are aware of it? You can do so
+on `Launchpad <https://bugs.launchpad.net/kolla>`__.
+Note this is the same place as for tasks.
 
-.. note::
+Getting Your Patch Merged
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   The generic footer block ``{% block footer %}{% endblock %}`` should not be
-   included in base images (for example, glance-base).
+Most changes proposed to Kolla require two +2 votes from core reviewers before
++W. A release note is required on most changes as well. Release notes policy
+is described in :ref:`its own section <release-notes>`.
+
+Significant changes should have documentation and testing provided with them.
+
+Project Team Lead Duties
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+All common PTL duties are enumerated in the `PTL guide <https://docs.openstack.org/project-team-guide/ptl.html>`_.
+Kolla-specific PTL duties are listed in `Kolla PTL guide <https://docs.openstack.org/kolla/latest/contributor/ptl-guide.html>`_.

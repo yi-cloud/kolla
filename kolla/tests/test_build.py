@@ -12,13 +12,12 @@
 
 import fixtures
 import itertools
-import mock
 import os
 import requests
 import sys
+from unittest import mock
 
 from kolla.cmd import build as build_cmd
-from kolla import exception
 from kolla.image import build
 from kolla.tests import base
 
@@ -26,23 +25,27 @@ from kolla.tests import base
 FAKE_IMAGE = build.Image(
     'image-base', 'image-base:latest',
     '/fake/path', parent_name=None,
-    parent=None, status=build.STATUS_MATCHED)
+    parent=None, status=build.Status.MATCHED)
 FAKE_IMAGE_CHILD = build.Image(
     'image-child', 'image-child:latest',
     '/fake/path2', parent_name='image-base',
-    parent=FAKE_IMAGE, status=build.STATUS_MATCHED)
+    parent=FAKE_IMAGE, status=build.Status.MATCHED)
 FAKE_IMAGE_CHILD_UNMATCHED = build.Image(
     'image-child-unmatched', 'image-child-unmatched:latest',
     '/fake/path3', parent_name='image-base',
-    parent=FAKE_IMAGE, status=build.STATUS_UNMATCHED)
+    parent=FAKE_IMAGE, status=build.Status.UNMATCHED)
 FAKE_IMAGE_CHILD_ERROR = build.Image(
     'image-child-error', 'image-child-error:latest',
     '/fake/path4', parent_name='image-base',
-    parent=FAKE_IMAGE, status=build.STATUS_ERROR)
+    parent=FAKE_IMAGE, status=build.Status.ERROR)
 FAKE_IMAGE_CHILD_BUILT = build.Image(
     'image-child-built', 'image-child-built:latest',
     '/fake/path5', parent_name='image-base',
-    parent=FAKE_IMAGE, status=build.STATUS_BUILT)
+    parent=FAKE_IMAGE, status=build.Status.BUILT)
+FAKE_IMAGE_GRANDCHILD = build.Image(
+    'image-grandchild', 'image-grandchild:latest',
+    '/fake/path6', parent_name='image-child',
+    parent=FAKE_IMAGE_CHILD, status=build.Status.MATCHED)
 
 
 class TasksTest(base.TestCase):
@@ -91,7 +94,7 @@ class TasksTest(base.TestCase):
         mock_client().push.assert_called_once_with(
             self.image.canonical_name, decode=True, stream=True)
         self.assertFalse(pusher.success)
-        self.assertEqual(build.STATUS_PUSH_ERROR, self.image.status)
+        self.assertEqual(build.Status.PUSH_ERROR, self.image.status)
 
     @mock.patch('docker.version', '3.0.0')
     @mock.patch.dict(os.environ, clear=True)
@@ -105,14 +108,14 @@ class TasksTest(base.TestCase):
         mock_client().push.assert_called_once_with(
             self.image.canonical_name, decode=True, stream=True)
         self.assertFalse(pusher.success)
-        self.assertEqual(build.STATUS_PUSH_ERROR, self.image.status)
+        self.assertEqual(build.Status.PUSH_ERROR, self.image.status)
 
         # Try again, this time without exception.
         pusher.reset()
         pusher.run()
         self.assertEqual(2, mock_client().push.call_count)
         self.assertTrue(pusher.success)
-        self.assertEqual(build.STATUS_BUILT, self.image.status)
+        self.assertEqual(build.Status.BUILT, self.image.status)
 
     @mock.patch('docker.version', '3.0.0')
     @mock.patch.dict(os.environ, clear=True)
@@ -127,7 +130,7 @@ class TasksTest(base.TestCase):
         mock_client().push.assert_called_once_with(
             self.image.canonical_name, decode=True, stream=True)
         self.assertFalse(pusher.success)
-        self.assertEqual(build.STATUS_PUSH_ERROR, self.image.status)
+        self.assertEqual(build.Status.PUSH_ERROR, self.image.status)
 
     @mock.patch('docker.version', '3.0.0')
     @mock.patch.dict(os.environ, clear=True)
@@ -142,7 +145,7 @@ class TasksTest(base.TestCase):
         mock_client().push.assert_called_once_with(
             self.image.canonical_name, decode=True, stream=True)
         self.assertFalse(pusher.success)
-        self.assertEqual(build.STATUS_PUSH_ERROR, self.image.status)
+        self.assertEqual(build.Status.PUSH_ERROR, self.image.status)
 
         # Try again, this time without exception.
         mock_client().push.return_value = [{'stream': 'mock push passes'}]
@@ -150,7 +153,7 @@ class TasksTest(base.TestCase):
         pusher.run()
         self.assertEqual(2, mock_client().push.call_count)
         self.assertTrue(pusher.success)
-        self.assertEqual(build.STATUS_BUILT, self.image.status)
+        self.assertEqual(build.Status.BUILT, self.image.status)
 
     @mock.patch.dict(os.environ, clear=True)
     @mock.patch('docker.APIClient')
@@ -162,8 +165,8 @@ class TasksTest(base.TestCase):
 
         mock_client().build.assert_called_once_with(
             path=self.image.path, tag=self.image.canonical_name, decode=True,
-            network_mode=None, nocache=False, rm=True, pull=True, forcerm=True,
-            buildargs=None)
+            network_mode='host', nocache=False, rm=True, pull=True,
+            forcerm=True, buildargs=None)
 
         self.assertTrue(builder.success)
 
@@ -172,14 +175,14 @@ class TasksTest(base.TestCase):
     def test_build_image_with_network_mode(self, mock_client):
         self.dc = mock_client
         push_queue = mock.Mock()
-        self.conf.set_override('network_mode', 'host')
+        self.conf.set_override('network_mode', 'bridge')
 
         builder = build.BuildTask(self.conf, self.image, push_queue)
         builder.run()
 
         mock_client().build.assert_called_once_with(
             path=self.image.path, tag=self.image.canonical_name, decode=True,
-            network_mode='host', nocache=False, rm=True, pull=True,
+            network_mode='bridge', nocache=False, rm=True, pull=True,
             forcerm=True, buildargs=None)
 
         self.assertTrue(builder.success)
@@ -199,8 +202,8 @@ class TasksTest(base.TestCase):
 
         mock_client().build.assert_called_once_with(
             path=self.image.path, tag=self.image.canonical_name, decode=True,
-            network_mode=None, nocache=False, rm=True, pull=True, forcerm=True,
-            buildargs=build_args)
+            network_mode='host', nocache=False, rm=True, pull=True,
+            forcerm=True, buildargs=build_args)
 
         self.assertTrue(builder.success)
 
@@ -218,8 +221,8 @@ class TasksTest(base.TestCase):
 
         mock_client().build.assert_called_once_with(
             path=self.image.path, tag=self.image.canonical_name, decode=True,
-            network_mode=None, nocache=False, rm=True, pull=True, forcerm=True,
-            buildargs=build_args)
+            network_mode='host', nocache=False, rm=True, pull=True,
+            forcerm=True, buildargs=build_args)
 
         self.assertTrue(builder.success)
 
@@ -239,8 +242,8 @@ class TasksTest(base.TestCase):
 
         mock_client().build.assert_called_once_with(
             path=self.image.path, tag=self.image.canonical_name, decode=True,
-            network_mode=None, nocache=False, rm=True, pull=True, forcerm=True,
-            buildargs=build_args)
+            network_mode='host', nocache=False, rm=True, pull=True,
+            forcerm=True, buildargs=build_args)
 
         self.assertTrue(builder.success)
 
@@ -259,7 +262,7 @@ class TasksTest(base.TestCase):
         get_result = builder.process_source(self.image, self.image.source)
 
         self.assertIsNone(get_result)
-        self.assertEqual(self.image.status, build.STATUS_ERROR)
+        self.assertEqual(self.image.status, build.Status.ERROR)
         mock_get.assert_called_once_with(self.image.source['source'],
                                          timeout=120)
 
@@ -288,7 +291,7 @@ class TasksTest(base.TestCase):
             push_queue = mock.Mock()
             builder = build.BuildTask(self.conf, self.image, push_queue)
             get_result = builder.process_source(self.image, self.image.source)
-            self.assertEqual(self.image.status, build.STATUS_ERROR)
+            self.assertEqual(self.image.status, build.Status.ERROR)
             self.assertFalse(builder.success)
             if source['type'] != 'local':
                 self.assertIsNone(get_result)
@@ -313,7 +316,7 @@ class TasksTest(base.TestCase):
 
         mock_rmtree.assert_called_with(
             "fake_image_path/fake-image1-archive-fake-reference1")
-        self.assertEqual(self.image.status, build.STATUS_ERROR)
+        self.assertEqual(self.image.status, build.Status.ERROR)
         self.assertFalse(builder.success)
         self.assertIsNone(get_result)
 
@@ -357,26 +360,17 @@ class KollaWorkerTest(base.TestCase):
         self.mock_client = patcher.start()
 
     def test_supported_base_type(self):
-        rh_base = ['centos', 'oraclelinux', 'rhel']
-        rh_type = ['source', 'binary', 'rdo', 'rhos']
-        deb_base = ['ubuntu', 'debian']
-        deb_type = ['source', 'binary']
+        build_base = ['centos', 'debian', 'ubuntu']
+        build_type = ['source', 'binary']
 
         for base_distro, install_type in itertools.chain(
-                itertools.product(rh_base, rh_type),
-                itertools.product(deb_base, deb_type)):
+                itertools.product(build_base, build_type)):
             self.conf.set_override('base', base_distro)
+            if base_distro == 'debian' and install_type == 'binary':
+                self.conf.set_override('base_arch', 'x86_64')
             self.conf.set_override('install_type', install_type)
             # should no exception raised
             build.KollaWorker(self.conf)
-
-    def test_unsupported_base_type(self):
-        for base_distro, install_type in itertools.product(
-                ['ubuntu', 'debian'], ['rdo', 'rhos']):
-            self.conf.set_override('base', base_distro)
-            self.conf.set_override('install_type', install_type)
-            self.assertRaises(exception.KollaMismatchBaseTypeException,
-                              build.KollaWorker, self.conf)
 
     def test_build_image_list_adds_plugins(self):
 
@@ -390,7 +384,7 @@ class KollaWorkerTest(base.TestCase):
         expected_plugin = {
             'name': 'neutron-server-plugin-networking-arista',
             'reference': 'master',
-            'source': 'https://git.openstack.org/openstack/networking-arista',
+            'source': 'https://opendev.org/x/networking-arista',
             'type': 'git'
         }
 
@@ -431,16 +425,82 @@ class KollaWorkerTest(base.TestCase):
 
     def _get_matched_images(self, images):
         return [image for image in images
-                if image.status == build.STATUS_MATCHED]
+                if image.status == build.Status.MATCHED]
 
     def test_skip_parents(self):
+        self.conf.set_override('skip_parents', True)
+        kolla = build.KollaWorker(self.conf)
+        kolla.images = self.images[:2]
+        for i in kolla.images:
+            i.status = build.Status.UNPROCESSED
+            if i.parent:
+                i.parent.children.append(i)
+        kolla.filter_images()
+
+        self.assertEqual(build.Status.MATCHED, kolla.images[1].status)
+        self.assertEqual(build.Status.SKIPPED, kolla.images[1].parent.status)
+
+    def test_skip_parents_regex(self):
         self.conf.set_override('regex', ['image-child'])
         self.conf.set_override('skip_parents', True)
         kolla = build.KollaWorker(self.conf)
-        kolla.images = self.images
+        kolla.images = self.images[:2]
+        for i in kolla.images:
+            i.status = build.Status.UNPROCESSED
+            if i.parent:
+                i.parent.children.append(i)
         kolla.filter_images()
 
-        self.assertEqual(build.STATUS_SKIPPED, kolla.images[1].parent.status)
+        self.assertEqual(build.Status.MATCHED, kolla.images[1].status)
+        self.assertEqual(build.Status.SKIPPED, kolla.images[1].parent.status)
+
+    def test_skip_parents_match_grandchildren(self):
+        self.conf.set_override('skip_parents', True)
+        kolla = build.KollaWorker(self.conf)
+        image_grandchild = FAKE_IMAGE_GRANDCHILD.copy()
+        image_grandchild.parent = self.images[1]
+        self.images[1].children.append(image_grandchild)
+        kolla.images = self.images[:2] + [image_grandchild]
+        for i in kolla.images:
+            i.status = build.Status.UNPROCESSED
+            if i.parent:
+                i.parent.children.append(i)
+        kolla.filter_images()
+
+        self.assertEqual(build.Status.MATCHED, kolla.images[2].status)
+        self.assertEqual(build.Status.SKIPPED, kolla.images[2].parent.status)
+        self.assertEqual(build.Status.SKIPPED, kolla.images[1].parent.status)
+
+    def test_skip_parents_match_grandchildren_regex(self):
+        self.conf.set_override('regex', ['image-grandchild'])
+        self.conf.set_override('skip_parents', True)
+        kolla = build.KollaWorker(self.conf)
+        image_grandchild = FAKE_IMAGE_GRANDCHILD.copy()
+        image_grandchild.parent = self.images[1]
+        self.images[1].children.append(image_grandchild)
+        kolla.images = self.images[:2] + [image_grandchild]
+        for i in kolla.images:
+            i.status = build.Status.UNPROCESSED
+            if i.parent:
+                i.parent.children.append(i)
+        kolla.filter_images()
+
+        self.assertEqual(build.Status.MATCHED, kolla.images[2].status)
+        self.assertEqual(build.Status.SKIPPED, kolla.images[2].parent.status)
+        self.assertEqual(build.Status.SKIPPED, kolla.images[1].parent.status)
+
+    @mock.patch.object(build.Image, 'in_docker_cache')
+    def test_skip_existing(self, mock_in_cache):
+        mock_in_cache.side_effect = [True, False]
+        self.conf.set_override('skip_existing', True)
+        kolla = build.KollaWorker(self.conf)
+        kolla.images = self.images[:2]
+        for i in kolla.images:
+            i.status = build.Status.UNPROCESSED
+        kolla.filter_images()
+
+        self.assertEqual(build.Status.SKIPPED, kolla.images[0].status)
+        self.assertEqual(build.Status.MATCHED, kolla.images[1].status)
 
     def test_without_profile(self):
         kolla = build.KollaWorker(self.conf)
@@ -454,6 +514,58 @@ class KollaWorkerTest(base.TestCase):
         self.conf.set_override('rpm_setup_config', ["a.rpm", "b.repo"])
         kolla = build.KollaWorker(self.conf)
         self.assertEqual(2, len(kolla.rpm_setup))
+
+    def test_build_distro_python_version_debian(self):
+        """check distro_python_version for Debian"""
+        self.conf.set_override('base', 'debian')
+        self.conf.set_override('install_type', 'source')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('3.9', kolla.distro_python_version)
+
+    def test_build_distro_python_version_ubuntu(self):
+        """check distro_python_version for Ubuntu"""
+        self.conf.set_override('base', 'ubuntu')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('3.8', kolla.distro_python_version)
+
+    def test_build_distro_python_version_centos(self):
+        """check distro_python_version for CentOS 8.0.1905"""
+        self.conf.set_override('base', 'centos')
+        self.conf.set_override('base_tag', '8.0.1905')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('3.6', kolla.distro_python_version)
+
+    def test_build_distro_package_manager(self):
+        """check distro_package_manager conf value is taken"""
+        self.conf.set_override('distro_package_manager', 'foo')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('foo', kolla.distro_package_manager)
+
+    def test_build_distro_package_manager_debian(self):
+        """check distro_package_manager apt for debian"""
+        self.conf.set_override('base', 'debian')
+        self.conf.set_override('install_type', 'source')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('apt', kolla.distro_package_manager)
+
+    def test_build_distro_package_manager_ubuntu(self):
+        """check distro_package_manager apt for ubuntu"""
+        self.conf.set_override('base', 'ubuntu')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('apt', kolla.distro_package_manager)
+
+    def test_base_package_type(self):
+        """check base_package_type conf value is taken"""
+        self.conf.set_override('base_package_type', 'pip')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('pip', kolla.base_package_type)
+
+    def test_base_package_type_debian(self):
+        """check base_package_type deb for debian"""
+        self.conf.set_override('base', 'debian')
+        self.conf.set_override('install_type', 'source')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('deb', kolla.base_package_type)
 
     def test_pre_defined_exist_profile(self):
         # default profile include the fake image: image-base
@@ -493,11 +605,13 @@ class KollaWorkerTest(base.TestCase):
     def test_summary(self):
         kolla = build.KollaWorker(self.conf)
         kolla.images = self.images
-        kolla.image_statuses_good['good'] = None
-        kolla.image_statuses_bad['bad'] = None
-        kolla.image_statuses_unmatched['unmatched'] = None
+        kolla.image_statuses_good['good'] = build.Status.BUILT
+        kolla.image_statuses_bad['bad'] = build.Status.ERROR
+        kolla.image_statuses_allowed_to_fail['bad2'] = build.Status.ERROR
+        kolla.image_statuses_unmatched['unmatched'] = build.Status.UNMATCHED
         results = kolla.summary()
-        self.assertIsNone(results['failed'][0]['status'])
+        self.assertEqual('error', results['failed'][0]['status'])  # bad
+        self.assertEqual('error', results['failed'][1]['status'])  # bad2
 
     @mock.patch('shutil.copytree')
     def test_work_dir(self, copytree_mock):
@@ -511,14 +625,14 @@ class MainTest(base.TestCase):
 
     @mock.patch.object(build, 'run_build')
     def test_images_built(self, mock_run_build):
-        image_statuses = ({}, {'img': 'built'}, {}, {})
+        image_statuses = ({}, {'img': 'built'}, {}, {}, {}, {})
         mock_run_build.return_value = image_statuses
         result = build_cmd.main()
         self.assertEqual(0, result)
 
     @mock.patch.object(build, 'run_build')
     def test_images_unmatched(self, mock_run_build):
-        image_statuses = ({}, {}, {'img': 'unmatched'}, {})
+        image_statuses = ({}, {}, {'img': 'unmatched'}, {}, {}, {})
         mock_run_build.return_value = image_statuses
         result = build_cmd.main()
         self.assertEqual(0, result)
@@ -531,7 +645,7 @@ class MainTest(base.TestCase):
 
     @mock.patch.object(build, 'run_build')
     def test_bad_images(self, mock_run_build):
-        image_statuses = ({'img': 'error'}, {}, {}, {})
+        image_statuses = ({'img': 'error'}, {}, {}, {}, {}, {})
         mock_run_build.return_value = image_statuses
         result = build_cmd.main()
         self.assertEqual(1, result)
@@ -544,7 +658,14 @@ class MainTest(base.TestCase):
 
     @mock.patch.object(build, 'run_build')
     def test_skipped_images(self, mock_run_build):
-        image_statuses = ({}, {}, {}, {'img': 'skipped'})
+        image_statuses = ({}, {}, {}, {'img': 'skipped'}, {}, {})
+        mock_run_build.return_value = image_statuses
+        result = build_cmd.main()
+        self.assertEqual(0, result)
+
+    @mock.patch.object(build, 'run_build')
+    def test_unbuildable_images(self, mock_run_build):
+        image_statuses = ({}, {}, {}, {}, {'img': 'unbuildable'}, {})
         mock_run_build.return_value = image_statuses
         result = build_cmd.main()
         self.assertEqual(0, result)

@@ -1,16 +1,27 @@
-{% macro install_packages(packages) -%}
+{% macro install_packages(packages, chain=False, clean=clean_package_cache) -%}
 {% if packages is defined and packages|length > 0 -%}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] -%}
-        RUN yum -y install {{ packages | join(' ') }} && yum clean all && rm -rf /var/cache/yum
-    {%- elif base_distro in ['debian', 'ubuntu'] -%}
+    {% if not chain -%} RUN {% endif -%}
+    {%- if base_package_type == 'rpm' -%}
+        {{ distro_package_manager }} -y install {{ packages | join(' ') }}
+        {%- if clean %} \
+    && {{ distro_package_manager }} clean all && rm -rf /var/cache/{{ distro_package_manager }}{% endif -%}
+    {%- elif base_package_type == 'deb' -%}
         {#-
           debian_package_install is a utility method to build up an appropriate
           set of commands to install packages in a debian-based environment that
           may include URL links to a .deb package
         -#}
-        RUN {{ debian_package_install(packages) }}
+        {{ debian_package_install(packages, clean) }}
     {%- endif %}
 {%- endif %}
+{%- endmacro %}
+
+{# Be Extra vigilant about introducing any extra whitespace at the
+   end of the macro for chaining purposes -#}
+{% macro rpm_security_update(cleanup) -%}
+    {{ distro_package_manager }} -y distro-sync --security --sec-severity=Important --sec-severity=Critical
+    {%- if cleanup %} \
+    && {{ distro_package_manager }} clean all && rm -rf /var/cache/{{ distro_package_manager }}{% endif -%}
 {%- endmacro %}
 
 {% macro sed(file='', expressions=[]) -%}
@@ -21,12 +32,9 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro install_pip(packages, constraints = true, pip_version = pip) %}
-{%- if not pip_version -%}
-    {%- set pip_version = 'pip' -%}
-{%- endif -%}
+{% macro install_pip(packages, constraints = true) %}
 {%- if packages is sequence and packages|length > 0 -%}
-    {{ pip_version }} --no-cache-dir install --upgrade{{ ' ' }}
+    python3 -m pip --no-cache-dir install --upgrade{{ ' ' }}
     {%- if constraints %}-c /requirements/upper-constraints.txt {% endif -%}
     {{ packages | join(' ') }}
 {%- else -%}
@@ -50,55 +58,29 @@ RUN usermod --append --home {{ homedir }} --groups kolla {{ name }} \
     && chown -R {{ user.uid }}:{{ user.gid }} {{ homedir }}
 {% endmacro %}
 
-{% macro debian_fix_existing_user(package, lines) %}
-RUN apt-get update \
-    && apt-get -y install --no-install-recommends {{ package }} \
-    || sed -i '/adduser/,+{{ lines }} d' /var/lib/dpkg/info/{{ package }}.postinst \
-    && echo "configuring packages" \
-    && dpkg --configure -a \
-    && echo "done" \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-{% endmacro %}
-
-{% macro debian_haproxy_existing_user_fix() %}
-{# NOTE(SamYaple): The postinst script breaks if the user 'haproxy' already exists #}
-    {{ debian_fix_existing_user('haproxy', 1) }}
-{% endmacro %}
-
-{% macro debian_mongodb_existing_user_fix() %}
-{# NOTE(hrw): The postinst script breaks if the user 'mongodb' already exists #}
-{# TODO(hrw): Version in Debian 'testing' checks does user exists #}
-    {{ debian_fix_existing_user('mongodb-server', 3) }}
-{% endmacro %}
-
-{% macro debian_opendaylight_existing_user_fix() %}
-{# NOTE(egonzalez): The postinst script breaks if the user 'odl' already exists #}
-    {{ debian_fix_existing_user('opendaylight', 1) }}
-{% endmacro %}
-
-{% macro install_kubectl() %}
-    {% if base_arch == 'x86_64' %}
-        ENV KUBE_ARCH=amd64
-    {% elif base_arch == 'aarch64' %}
-        ENV KUBE_ARCH=arm64
-    {% else %}
-        RUN echo 'There is no "kubectl" binary for {{ base_arch }}' \
-            && /bin/false
-    {% endif %}
-
-    RUN curl -o /usr/bin/kubectl http://storage.googleapis.com/kubernetes-release/release/v1.5.4/bin/linux/${KUBE_ARCH}/kubectl \
-        && chmod 755 /usr/bin/kubectl
-{% endmacro %}
-
-
-{% macro install_fluent_plugins(plugins, chain=False) -%}
+{% macro install_fluent_plugins(binary, plugins, chain=False) -%}
 {% if plugins is defined and plugins|length > 0 -%}
     {% if not chain -%} RUN {% endif -%}
-    {%- if base_distro in ['centos', 'oraclelinux', 'rhel'] -%}
-        ulimit -n 65536 && gem install --minimal-deps {{ plugins | join(' ') }}
-    {%- elif base_distro in ['debian', 'ubuntu'] -%}
+    {%- if binary == 'td-agent' -%}
         ulimit -n 65536 && td-agent-gem install {{ plugins | join(' ') }}
+    {%- else -%}
+        ulimit -n 65536 && gem install --minimal-deps {{ plugins | join(' ') }}
     {%- endif %}
 {%- endif %}
 {%- endmacro %}
+
+{% macro enable_extra_repos(repos) %}
+
+{{ handle_repos(repos, 'enable') }}
+
+{% endmacro %}
+
+{% macro disable_extra_repos(repos) %}
+
+{{ handle_repos(repos, 'disable') }}
+
+{% endmacro %}
+
+{% macro add_binary_source_envs() %}
+ENV KOLLA_INSTALL_TYPE={{ install_type }}
+{% endmacro %}

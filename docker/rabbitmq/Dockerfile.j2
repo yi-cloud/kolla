@@ -1,5 +1,7 @@
-FROM {{ namespace }}/{{ image_prefix }}base:{{ tag }}
+FROM {{ namespace }}/{{ infra_image_prefix }}base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block rabbitmq_header %}{% endblock %}
 
@@ -7,40 +9,27 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 
 {{ macros.configure_user(name='rabbitmq') }}
 
+{# NOTE(hrw): erlang packages from Erlang Solutions needs libwx from EPEL #}
+{% if base_arch == 'aarch64' %}
+{{ macros.enable_extra_repos(['epel']) }}
+{% endif %}
+
+{{ macros.enable_extra_repos(['erlang', 'powertools', 'rabbitmq']) }}
+
 {% block rabbitmq_install %}
-{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+{% if base_package_type == 'rpm' %}
+
     {% set rabbitmq_packages = [
-        'erlang-hipe',
+        'erlang-23.*',
         'hostname',
-        'rabbitmq-server'
+        'rabbitmq-server-3.8.*'
     ] %}
 
-{% elif base_distro in ['debian', 'ubuntu'] %}
+{% elif base_package_type == 'deb' %}
     {% set rabbitmq_packages = [
-        'erlang-nox',
-        'logrotate'
+        'logrotate',
+        'rabbitmq-server',
     ] %}
-
-    {% if base_distro == 'debian' %}
-         {% set rabbitmq_packages = rabbitmq_packages + [
-             'rabbitmq-server/stretch-backports'
-         ] %}
-    {% else %}
-         {% set rabbitmq_packages = rabbitmq_packages + [
-             'https://www.rabbitmq.com/releases/rabbitmq-server/v3.6.5/rabbitmq-server_3.6.5-1_all.deb',
-         ] %}
-    {% endif %}
-
-    {% if base_arch == 'aarch64' %}
-         {% set rabbitmq_packages = rabbitmq_packages + [
-             'erlang-base',
-         ] %}
-    {% else %}
-         {% set rabbitmq_packages = rabbitmq_packages + [
-             'erlang-base-hipe',
-         ] %}
-
-    {% endif %}
 
 {% endif %}
 
@@ -51,17 +40,24 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 {% block rabbitmq_install_plugins %}
 
 RUN rm -rf /var/lib/rabbitmq/* \
-    && ln -s /usr/lib/rabbitmq/lib/rabbitmq_server-3.6.* /usr/lib/rabbitmq/lib/rabbitmq_server-3.6 \
-    && curl -o /usr/lib/rabbitmq/lib/rabbitmq_server-3.6/plugins/rabbitmq_clusterer-3.6.x-667f92b0.ez https://www.rabbitmq.com/community-plugins/v3.6.x/rabbitmq_clusterer-3.6.x-667f92b0.ez \
+    && mkdir -p /usr/lib/rabbitmq/plugins \
     && /usr/lib/rabbitmq/bin/rabbitmq-plugins enable --offline \
        rabbitmq_management \
-       rabbitmq_clusterer
+       rabbitmq_prometheus
 
 {% endblock %}
 
+{% if docker_healthchecks %}
+{% block healthcheck_installation %}
+
+COPY healthcheck_rabbitmq /usr/local/bin/healthcheck_rabbitmq
+RUN chmod 755 /usr/local/bin/healthcheck_rabbitmq
+
+{% endblock %}
+{% endif %}
+
 COPY extend_start.sh /usr/local/bin/kolla_extend_start
-COPY rabbitmq_get_gospel_node.py /usr/local/bin/rabbitmq_get_gospel_node
-RUN chmod 755 /usr/local/bin/kolla_extend_start /usr/local/bin/rabbitmq_get_gospel_node
+RUN chmod 755 /usr/local/bin/kolla_extend_start
 
 {% block rabbitmq_footer %}{% endblock %}
 {% block footer %}{% endblock %}

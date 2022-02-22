@@ -1,5 +1,7 @@
 FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block designate_base_header %}{% endblock %}
 
@@ -8,19 +10,19 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 {{ macros.configure_user(name='designate') }}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
        {% set designate_base_packages = [
             'openstack-designate-common',
-            'python-tooz',
-            'python2-oslo-reports',
-            'python2-suds'
+            'python3-oslo-reports',
+            'python3-suds',
+            'python3-tooz'
         ] %}
 
 {{ macros.install_packages(designate_base_packages | customizable("packages")) }}
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
        {% set designate_base_packages = [
             'designate-common',
-            'python-tooz'
+            'python3-tooz'
         ] %}
 
 {{ macros.install_packages(designate_base_packages | customizable("packages")) }}

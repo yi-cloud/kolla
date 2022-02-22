@@ -1,15 +1,15 @@
-FROM {{ namespace }}/{{ image_prefix }}base:{{ tag }}
+FROM {{ namespace }}/{{ infra_image_prefix }}base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block haproxy_header %}{% endblock %}
 
 {% import "macros.j2" as macros with context %}
 
-{{ macros.configure_user(name='haproxy') }}
+{{ macros.enable_extra_repos(['haproxy']) }}
 
-{% if base_distro in ['debian', 'ubuntu'] %}
-{{ macros.debian_haproxy_existing_user_fix() }}
-{% endif %}
+{{ macros.configure_user(name='haproxy') }}
 
 {% set haproxy_packages = [
     'haproxy'

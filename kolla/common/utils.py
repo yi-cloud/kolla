@@ -32,6 +32,8 @@ def make_a_logger(conf=None, image_name=None):
         log.addHandler(handler)
     if conf is not None and conf.debug:
         log.setLevel(logging.DEBUG)
+    elif conf is not None and conf.quiet and image_name:
+        log.setLevel(logging.CRITICAL)
     else:
         log.setLevel(logging.INFO)
     return log
@@ -69,5 +71,5 @@ def squash(old_image, new_image,
         subprocess.check_output(cmds, stderr=subprocess.STDOUT)  # nosec
     except subprocess.CalledProcessError as ex:
         LOG.exception('Get error during squashing image: %s',
-                      ex.stdout)
+                      ex.output)
         raise

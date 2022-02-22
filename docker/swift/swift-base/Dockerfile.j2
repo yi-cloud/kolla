@@ -1,5 +1,7 @@
 FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block swift_base_header %}{% endblock %}
 
@@ -8,13 +10,12 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 {{ macros.configure_user(name='swift') }}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
         {% set swift_base_packages = [
-                'openstack-swift',
-                'nmap-ncat'
-            ]
-        %}
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+            'nmap-ncat',
+            'openstack-swift',
+        ] %}
+    {% elif base_package_type == 'deb' %}
         {% set swift_base_packages = [
             'netcat-openbsd',
             'rsync',
@@ -23,11 +24,23 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
     {% endif %}
 
 {{ macros.install_packages(swift_base_packages | customizable("packages")) }}
+    {# NOTE(mgoddard): UCA packages seem to modify the group membership for #}
+    {# the swift user, removing it from the kolla group. #}
+    {% if base_package_type == 'deb' %}
+RUN usermod --append --groups kolla swift
+    {% endif %}
 {% elif install_type == 'source' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
-        {% set swift_base_packages = ['liberasurecode-devel','nmap-ncat'] %}
-    {% elif base_distro in ['debian', 'ubuntu'] %}
-        {% set swift_base_packages = ['liberasurecode-dev','netcat-openbsd', 'rsync'] %}
+    {% if base_package_type == 'rpm' %}
+        {% set swift_base_packages = [
+            'liberasurecode-devel',
+            'nmap-ncat',
+        ] %}
+    {% elif base_package_type == 'deb' %}
+        {% set swift_base_packages = [
+            'liberasurecode-dev',
+            'netcat-openbsd',
+            'rsync',
+        ] %}
     {% endif %}
 
 {{ macros.install_packages(swift_base_packages | customizable("packages")) }}
@@ -40,9 +53,9 @@ ADD swift-base-archive /swift-base-source
 
 RUN ln -s swift-base-source/* swift \
     && {{ macros.install_pip(swift_base_pip_packages | customizable("pip_packages")) }} \
-    && mkdir -p /etc/swift /var/cache/swift \
+    && mkdir -p /etc/swift /var/cache/swift /var/lock/swift \
     && cp -r /swift/etc/* /etc/swift/ \
-    && chown -R swift: /etc/swift /var/cache/swift
+    && chown -R swift: /etc/swift /var/cache/swift /var/lock/swift
 {% endif %}
 
 COPY swift-rootwrap /var/lib/kolla/venv/bin/swift-rootwrap

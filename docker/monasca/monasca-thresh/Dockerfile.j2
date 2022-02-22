@@ -1,12 +1,13 @@
-FROM {{ namespace }}/{{ image_prefix }}storm:{{ tag }}
+FROM {{ namespace }}/{{ infra_image_prefix }}storm-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
-
-USER root
+{% endblock %}
 
 {% block monasca_thresh_header %}{% endblock %}
 
 {% import "macros.j2" as macros with context %}
 
+{{ macros.add_binary_source_envs() }}
 {{ macros.configure_user(name='monasca') }}
 
 {% if install_type == 'binary' %}
@@ -16,28 +17,27 @@ RUN echo '{{ install_type }} not yet available for {{ base_distro }}' \
 
 {% elif install_type == 'source' %}
 
-{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+{% if base_package_type == 'rpm' %}
     {% set monasca_thresh_packages = [
         'maven',
     ] %}
 
 ENV JAVA_HOME /usr/lib/jvm/jre-1.8.0-openjdk/
 
-{% elif base_distro in ['debian', 'ubuntu'] %}
+{% elif base_package_type == 'deb' %}
+
+    {% if base_distro == 'debian' %}
+        {% set java_version = '11' %}
+    {% elif base_distro == 'ubuntu' %}
+        {% set java_version = '8' %}
+    {% endif %}
+
     {% set monasca_thresh_packages = [
-        'openjdk-8-jdk-headless',
+        'openjdk-' + java_version + '-jdk-headless',
         'maven',
     ] %}
 
-{% if base_arch == 'x86_64' %}
-ARG java_arch=amd64
-{% elif base_arch == 'aarch64' %}
-ARG java_arch=arm64
-{% else %}
-ARG java_arch={{ base_arch }}
-{% endif %}
-
-ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-${java_arch}/
+ENV JAVA_HOME /usr/lib/jvm/java-{{java_version}}-openjdk-{{debian_arch}}/
 
 {% endif %}
 
@@ -66,8 +66,14 @@ RUN cd /monasca-common-source/java \
 
 # Overwrite the script inherited from Storm
 COPY extend_start.sh /usr/local/bin/kolla_extend_start
+
+# Add bootstrap script
+COPY topology_bootstrap.sh /usr/local/bin/topology_bootstrap
+
 RUN touch /usr/local/bin/kolla_monasca_extend_start \
-    && chmod 755 /usr/local/bin/kolla_extend_start /usr/local/bin/kolla_monasca_extend_start
+    && chmod 755 /usr/local/bin/kolla_extend_start \
+    /usr/local/bin/kolla_monasca_extend_start \
+    /usr/local/bin/topology_bootstrap
 
 {% block monasca_thresh_footer %}{% endblock %}
 {% block footer %}{% endblock %}

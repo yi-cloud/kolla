@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 extensions = [
     'openstackdocstheme',
     'sphinx.ext.autodoc',
+    'sphinxcontrib.rsvgconverter',
 ]
 
 # autodoc generation is a bit aggressive and a nuisance when doing heavy
@@ -36,19 +37,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'kolla'
-copyright = u'2013-present, OpenStack Foundation'
-
-# The version info for the project you're documenting, acts as replacement for
-# |version| and |release|, also used in various other places throughout the
-# built documents.
-#
-# The short X.Y version.
-from kolla.version import version_info as kolla_version
-# The full version, including alpha/beta/rc tags.
-release = kolla_version.version_string_with_vcs()
-# The short X.Y version.
-version = kolla_version.canonical_version_string()
+project = 'kolla'
+copyright = '2013-present, OpenStack Foundation'
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
 add_function_parentheses = True
@@ -58,7 +48,7 @@ add_function_parentheses = True
 add_module_names = True
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'native'
 
 # -- Options for HTML output --------------------------------------------------
 
@@ -68,23 +58,33 @@ pygments_style = 'sphinx'
 html_theme = 'openstackdocs'
 # html_static_path = ['static']
 
+html_theme_options = {
+    "show_other_versions": True,
+}
+
 # Output file base name for HTML help builder.
 htmlhelp_basename = '%sdoc' % project
-
-# Must set this variable to include year, month, day, hours, and minutes.
-html_last_updated_fmt = '%Y-%m-%d %H:%M'
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto/manual]).
 latex_documents = [
     ('index',
-     '%s.tex' % project,
-     u'%s Documentation' % project,
-     u'OpenStack Foundation', 'manual'),
+     'doc-%s.tex' % project,
+     '%s Documentation' % project,
+     'OpenStack Foundation', 'manual'),
 ]
 
+# Disable usage of xindy https://bugzilla.redhat.com/show_bug.cgi?id=1643664
+latex_use_xindy = False
+
 # openstackdocstheme options
-repository_name = 'openstack/kolla'
-bug_project = 'kolla'
-bug_tag = ''
+openstackdocs_repo_name = 'openstack/kolla'
+openstackdocs_pdf_link = True
+openstackdocs_bug_project = 'kolla'
+openstackdocs_bug_tag = ''
+openstackdocs_auto_name = False
+openstackdocs_projects = [
+    'kolla-ansible',
+    'oslotest',
+]

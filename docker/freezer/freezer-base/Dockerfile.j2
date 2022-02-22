@@ -1,5 +1,7 @@
 FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block freezer_base_header %}{% endblock %}
 
@@ -13,10 +15,12 @@ RUN echo '{{ install_type }} not yet available for {{ base_distro }}' \
     && /bin/false
 
 {% elif install_type == 'source' %}
-    {% set freezer_base_packages = [
-        'trickle'
-    ] %}
+    {% if base_package_type == 'deb' %}
+        {% set freezer_base_packages = [
+            'trickle'
+        ] %}
 {{ macros.install_packages(freezer_base_packages | customizable("packages")) }}
+    {% endif %}
 
 ADD freezer-base-archive /freezer-base-source
 

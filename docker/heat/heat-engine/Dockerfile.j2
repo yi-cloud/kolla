@@ -1,19 +1,26 @@
 FROM {{ namespace }}/{{ image_prefix }}heat-base:{{ tag }}
+{% block labels %}
 LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+{% endblock %}
 
 {% block heat_engine_header %}{% endblock %}
 
 {% import "macros.j2" as macros with context %}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
-       {% set heat_engine_packages = [
-            'python-barbicanclient',
-            'python-zaqarclient',
-            'openstack-heat-engine'
+    {% if base_package_type == 'rpm' %}
+        {% set heat_engine_packages = [
+            'openstack-heat-engine',
+            'python3-barbicanclient',
         ] %}
-    {% elif base_distro in ['debian', 'ubuntu'] %}
-        {% set heat_engine_packages = ['heat-engine'] %}
+    {% elif base_package_type == 'deb' %}
+        {# TODO(mnasiadka): Remove extra clients once bug 1893935 is solved in UCA #}
+        {# bug: https://bugs.launchpad.net/cloud-archive/+bug/1893935 #}
+        {% set heat_engine_packages = [
+            'heat-engine',
+            'python3-vitrageclient',
+            'python3-zunclient',
+        ] %}
     {% endif %}
 {{ macros.install_packages(heat_engine_packages | customizable("packages")) }}
 
